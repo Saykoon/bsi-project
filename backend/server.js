@@ -1,6 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const speakeasy = require('speakeasy');
+const qrcode = require('qrcode');
 const { dbHelpers } = require('./database');
 const { authenticateToken, JWT_SECRET } = require('./middleware');
 
@@ -99,6 +101,39 @@ app.post('/api/login', async (req, res) => {
     );
 
     res.json({ token, user: { id: user.id, email: user.email } });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd serwera' });
+  }
+});
+
+// Setup TOTP - generowanie QR kodu
+app.get('/api/setup-totp', authenticateToken, async (req, res) => {
+  try {
+    const user = await dbHelpers.get('SELECT * FROM users WHERE id = ?', [req.userId]);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'Użytkownik nie znaleziony' });
+    }
+
+    // Generuj secret
+    const secret = speakeasy.generateSecret({
+      name: `BSI 2FA (${user.email})`
+    });
+
+    // Zapisz secret w bazie
+    await dbHelpers.run(
+      'UPDATE users SET totp_secret = ? WHERE id = ?',
+      [secret.base32, user.id]
+    );
+
+    // Wygeneruj QR kod
+    const qrCodeUrl = await qrcode.toDataURL(secret.otpauth_url);
+
+    res.json({
+      secret: secret.base32,
+      qrCode: qrCodeUrl
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Błąd serwera' });
