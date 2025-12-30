@@ -177,6 +177,58 @@ app.post('/api/enable-totp', authenticateToken, async (req, res) => {
   }
 });
 
+// Weryfikacja TOTP przy logowaniu
+app.post('/api/verify-totp', async (req, res) => {
+  try {
+    const { tempToken, totpCode } = req.body;
+
+    if (!tempToken || !totpCode) {
+      return res.status(400).json({ error: 'Token i kod TOTP są wymagane' });
+    }
+
+    // Weryfikuj tempToken
+    let decoded;
+    try {
+      decoded = jwt.verify(tempToken, JWT_SECRET);
+      if (!decoded.tempAuth) {
+        return res.status(401).json({ error: 'Nieprawidłowy token' });
+      }
+    } catch (error) {
+      return res.status(401).json({ error: 'Token wygasł' });
+    }
+
+    const user = await dbHelpers.get('SELECT * FROM users WHERE id = ?', [decoded.userId]);
+
+    if (!user || !user.totp_enabled) {
+      return res.status(400).json({ error: 'TOTP nie jest włączone' });
+    }
+
+    // Weryfikuj kod TOTP
+    const verified = speakeasy.totp.verify({
+      secret: user.totp_secret,
+      encoding: 'base32',
+      token: totpCode,
+      window: 2
+    });
+
+    if (!verified) {
+      return res.status(401).json({ error: 'Nieprawidłowy kod TOTP' });
+    }
+
+    // Wygeneruj finalny token
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    res.json({ token, user: { id: user.id, email: user.email } });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd serwera' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Serwer działa na http://localhost:${PORT}`);
 });
