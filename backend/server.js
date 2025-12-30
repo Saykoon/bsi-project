@@ -1,5 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const { dbHelpers } = require('./database');
 const { authenticateToken, JWT_SECRET } = require('./middleware');
 
@@ -49,6 +50,55 @@ app.post('/api/register', async (req, res) => {
       message: 'Użytkownik zarejestrowany',
       userId: result.lastID
     });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd serwera' });
+  }
+});
+
+// Logowanie użytkownika
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email i hasło są wymagane' });
+    }
+
+    // Znajdź użytkownika
+    const user = await dbHelpers.get('SELECT * FROM users WHERE email = ?', [email]);
+    if (!user) {
+      return res.status(401).json({ error: 'Nieprawidłowe dane logowania' });
+    }
+
+    // Weryfikuj hasło
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Nieprawidłowe dane logowania' });
+    }
+
+    // Jeśli TOTP włączone, wymagaj weryfikacji
+    if (user.totp_enabled) {
+      const tempToken = jwt.sign(
+        { userId: user.id, email: user.email, tempAuth: true },
+        JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({
+        message: 'Wymagana weryfikacja TOTP',
+        tempToken,
+        requiresTotp: true
+      });
+    }
+
+    // Wygeneruj token JWT
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    res.json({ token, user: { id: user.id, email: user.email } });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Błąd serwera' });
