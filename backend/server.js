@@ -140,6 +140,43 @@ app.get('/api/setup-totp', authenticateToken, async (req, res) => {
   }
 });
 
+// Włączenie TOTP - weryfikacja i aktywacja
+app.post('/api/enable-totp', authenticateToken, async (req, res) => {
+  try {
+    const { totpCode } = req.body;
+
+    if (!totpCode) {
+      return res.status(400).json({ error: 'Kod TOTP jest wymagany' });
+    }
+
+    const user = await dbHelpers.get('SELECT * FROM users WHERE id = ?', [req.userId]);
+
+    if (!user || !user.totp_secret) {
+      return res.status(400).json({ error: 'Najpierw skonfiguruj TOTP' });
+    }
+
+    // Weryfikuj kod
+    const verified = speakeasy.totp.verify({
+      secret: user.totp_secret,
+      encoding: 'base32',
+      token: totpCode,
+      window: 2
+    });
+
+    if (!verified) {
+      return res.status(401).json({ error: 'Nieprawidłowy kod TOTP' });
+    }
+
+    // Włącz TOTP
+    await dbHelpers.run('UPDATE users SET totp_enabled = 1 WHERE id = ?', [user.id]);
+
+    res.json({ message: '2FA włączone pomyślnie' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd serwera' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Serwer działa na http://localhost:${PORT}`);
 });
