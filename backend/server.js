@@ -19,9 +19,27 @@ app.get('/api', (req, res) => {
     message: 'API Backend z TOTP 2FA',
     endpoints: [
       'POST /api/register',
-      'POST /api/login'
+      'POST /api/login',
+      'POST /api/verify-totp',
+      'GET /api/setup-totp (auth)',
+      'POST /api/enable-totp (auth)',
+      'GET /api/me (auth)'
     ]
   });
+});
+
+// Informacje o użytkowniku
+app.get('/api/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await dbHelpers.get(
+      'SELECT id, email, totp_enabled FROM users WHERE id = ?',
+      [req.userId]
+    );
+    res.json(user);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd serwera' });
+  }
 });
 
 // Rejestracja użytkownika
