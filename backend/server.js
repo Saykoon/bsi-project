@@ -286,6 +286,62 @@ app.post('/api/my-items', authenticateToken, async (req, res) => {
   }
 });
 
+// CRUD - Edytuj notatkę
+app.put('/api/my-items/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, content } = req.body;
+
+    if (!title) {
+      return res.status(400).json({ error: 'Tytuł jest wymagany' });
+    }
+
+    // Sprawdź czy notatka należy do użytkownika
+    const item = await dbHelpers.get(
+      'SELECT * FROM items WHERE id = ? AND user_id = ?',
+      [id, req.userId]
+    );
+
+    if (!item) {
+      return res.status(404).json({ error: 'Notatka nie znaleziona' });
+    }
+
+    await dbHelpers.run(
+      'UPDATE items SET title = ?, content = ? WHERE id = ?',
+      [title, content || '', id]
+    );
+
+    res.json({ message: 'Notatka zaktualizowana' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd serwera' });
+  }
+});
+
+// CRUD - Usuń notatkę
+app.delete('/api/my-items/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Sprawdź czy notatka należy do użytkownika
+    const item = await dbHelpers.get(
+      'SELECT * FROM items WHERE id = ? AND user_id = ?',
+      [id, req.userId]
+    );
+
+    if (!item) {
+      return res.status(404).json({ error: 'Notatka nie znaleziona' });
+    }
+
+    await dbHelpers.run('DELETE FROM items WHERE id = ?', [id]);
+
+    res.json({ message: 'Notatka usunięta' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd serwera' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Serwer działa na http://localhost:${PORT}`);
 });
