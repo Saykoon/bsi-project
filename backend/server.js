@@ -247,6 +247,45 @@ app.post('/api/verify-totp', async (req, res) => {
   }
 });
 
+// CRUD - Lista notatek użytkownika
+app.get('/api/my-items', authenticateToken, async (req, res) => {
+  try {
+    const items = await dbHelpers.all(
+      'SELECT id, title, content, created_at FROM items WHERE user_id = ? ORDER BY created_at DESC',
+      [req.userId]
+    );
+    res.json(items);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd serwera' });
+  }
+});
+
+// CRUD - Dodaj notatkę
+app.post('/api/my-items', authenticateToken, async (req, res) => {
+  try {
+    const { title, content } = req.body;
+
+    if (!title) {
+      return res.status(400).json({ error: 'Tytuł jest wymagany' });
+    }
+
+    const result = await dbHelpers.run(
+      'INSERT INTO items (user_id, title, content) VALUES (?, ?, ?)',
+      [req.userId, title, content || '']
+    );
+
+    res.status(201).json({
+      id: result.lastID,
+      title,
+      content: content || ''
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Błąd serwera' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Serwer działa na http://localhost:${PORT}`);
 });
