@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BSI - Autoryzacja 2FA</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔐 BSI 2FA</h1>
+            <p>Aplikacja z autoryzacją TOTP</p>
+        </header>
+
+        <!-- Panel logowania -->
+        <div id="authPanel" class="panel">
+            <div class="tabs">
+                <button class="tab active" data-tab="login">Logowanie</button>
+                <button class="tab" data-tab="register">Rejestracja</button>
+            </div>
+
+            <!-- Formularz logowania -->
+            <div id="loginTab" class="tab-content active">
+                <form id="loginForm">
+                    <input type="email" id="loginEmail" placeholder="Email" required>
+                    <input type="password" id="loginPassword" placeholder="Hasło" required>
+                    <button type="submit">Zaloguj się</button>
+                </form>
+            </div>
+
+            <!-- Formularz rejestracji -->
+            <div id="registerTab" class="tab-content">
+                <form id="registerForm">
+                    <input type="email" id="registerEmail" placeholder="Email" required>
+                    <input type="password" id="registerPassword" placeholder="Hasło" required>
+                    <button type="submit">Zarejestruj się</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Panel TOTP -->
+        <div id="totpPanel" class="panel hidden">
+            <h2>Weryfikacja TOTP</h2>
+            <p>Wprowadź 6-cyfrowy kod z aplikacji authenticator</p>
+            <form id="totpForm">
+                <input type="text" id="totpCode" placeholder="000000" maxlength="6" required>
+                <button type="submit">Weryfikuj</button>
+            </form>
+        </div>
+
+        <!-- Panel główny -->
+        <div id="mainPanel" class="panel hidden">
+            <div class="user-info">
+                <span id="userEmail"></span>
+                <button id="logoutBtn">Wyloguj</button>
+            </div>
+
+            <div id="totpSetup" class="hidden">
+                <h3>Konfiguracja 2FA</h3>
+                <button id="setupTotpBtn">Włącz 2FA</button>
+            </div>
+
+            <h2>Moje notatki</h2>
+            <button id="addItemBtn" class="btn-primary">+ Nowa notatka</button>
+            
+            <div id="itemsList"></div>
+        </div>
+
+        <!-- Modal QR -->
+        <div id="qrModal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Zeskanuj kod QR</h3>
+                <div id="qrCodeContainer"></div>
+                <p>Wprowadź kod z aplikacji aby aktywować 2FA</p>
+                <input type="text" id="enableTotpCode" placeholder="000000" maxlength="6">
+                <button id="enableTotpBtn">Aktywuj 2FA</button>
+                <button id="closeQrBtn">Anuluj</button>
+            </div>
+        </div>
+
+        <!-- Modal notatki -->
+        <div id="itemModal" class="modal hidden">
+            <div class="modal-content">
+                <h3 id="modalTitle">Nowa notatka</h3>
+                <input type="text" id="itemTitle" placeholder="Tytuł">
+                <textarea id="itemContent" placeholder="Treść notatki"></textarea>
+                <button id="saveItemBtn">Zapisz</button>
+                <button id="closeItemBtn">Anuluj</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
