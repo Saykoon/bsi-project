@@ -13,6 +13,14 @@ const PORT = 3000;
 app.use(express.json());
 app.use(express.static('../frontend'));
 
+// CORS dla development
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  next();
+});
+
 // Endpoint testowy
 app.get('/api', (req, res) => {
   res.json({
