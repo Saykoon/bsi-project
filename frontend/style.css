@@ -246,4 +246,17 @@ button[type="submit"]:hover,
     .panel {
         padding: 20px;
     }
+    
+    .tabs {
+        flex-direction: column;
+    }
+}
+
+/* Footer info */
+footer {
+    text-align: center;
+    color: white;
+    margin-top: 20px;
+    font-size: 0.9rem;
+    opacity: 0.8;
 }
