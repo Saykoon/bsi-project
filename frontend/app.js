@@ -55,6 +55,18 @@ async function handleRegister(e) {
     e.preventDefault();
     const email = document.getElementById('registerEmail').value;
     const password = document.getElementById('registerPassword').value;
+    const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
+
+    // Walidacja powtórzenia hasła
+    if (password !== passwordConfirm) {
+        alert('Hasła nie są identyczne!');
+        return;
+    }
+
+    if (password.length < 6) {
+        alert('Hasło musi mieć minimum 6 znaków');
+        return;
+    }
 
     try {
         const res = await fetch(`${API_URL}/register`, {
@@ -68,6 +80,7 @@ async function handleRegister(e) {
         if (res.ok) {
             alert('Rejestracja udana! Możesz się zalogować.');
             document.querySelector('.tab[data-tab="login"]').click();
+            document.getElementById('registerForm').reset();
         } else {
             alert(data.error || 'Błąd rejestracji');
         }
