@@ -56,6 +56,16 @@ async function handleRegister(e) {
     const email = document.getElementById('registerEmail').value;
     const password = document.getElementById('registerPassword').value;
 
+    // Walidacja polityki hasła
+    if (password.length < 8) {
+        alert('Hasło musi mieć minimum 8 znaków');
+        return;
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+        alert('Hasło musi zawierać przynajmniej jeden znak specjalny');
+        return;
+    }
+
     try {
         const res = await fetch(`${API_URL}/register`, {
             method: 'POST',
@@ -230,6 +240,12 @@ async function loadItems() {
         const res = await fetch(`${API_URL}/my-items`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+
+        if (res.status === 403) {
+            const container = document.getElementById('itemsList');
+            container.innerHTML = '<p style="text-align:center;color:#ff4757;">Włącz 2FA, aby korzystać z notatek</p>';
+            return;
+        }
 
         const items = await res.json();
 

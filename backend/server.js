@@ -3,8 +3,41 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const speakeasy = require('speakeasy');
 const qrcode = require('qrcode');
+const crypto = require('crypto');
 const { dbHelpers } = require('./database');
 const { authenticateToken, JWT_SECRET } = require('./middleware');
+
+// Klucz szyfrowania TOTP (w produkcji: zmienna środowiskowa)
+const ENCRYPTION_KEY = crypto.scryptSync('totp-encryption-key-2fa-bsi', 'salt', 32);
+const ENCRYPTION_IV_LENGTH = 16;
+
+function encryptTotpSecret(text) {
+  const iv = crypto.randomBytes(ENCRYPTION_IV_LENGTH);
+  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+}
+
+function decryptTotpSecret(text) {
+  const parts = text.split(':');
+  const iv = Buffer.from(parts[0], 'hex');
+  const encryptedText = parts[1];
+  const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+
+function validatePassword(password) {
+  if (password.length < 8) {
+    return { valid: false, error: 'Hasło musi mieć minimum 8 znaków' };
+  }
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    return { valid: false, error: 'Hasło musi zawierać przynajmniej jeden znak specjalny' };
+  }
+  return { valid: true };
+}
 
 const app = express();
 const PORT = 3000;
@@ -57,6 +90,12 @@ app.post('/api/register', async (req, res) => {
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email i hasło są wymagane' });
+    }
+
+    // Walidacja polityki hasła
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.valid) {
+      return res.status(400).json({ error: passwordCheck.error });
     }
 
     // Sprawdź czy użytkownik istnieje
@@ -147,10 +186,11 @@ app.get('/api/setup-totp', authenticateToken, async (req, res) => {
       name: `BSI 2FA (${user.email})`
     });
 
-    // Zapisz secret w bazie
+    // Zaszyfruj i zapisz secret w bazie
+    const encryptedSecret = encryptTotpSecret(secret.base32);
     await dbHelpers.run(
       'UPDATE users SET totp_secret = ? WHERE id = ?',
-      [secret.base32, user.id]
+      [encryptedSecret, user.id]
     );
 
     // Wygeneruj QR kod
@@ -181,9 +221,10 @@ app.post('/api/enable-totp', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Najpierw skonfiguruj TOTP' });
     }
 
-    // Weryfikuj kod
+    // Odszyfruj secret i weryfikuj kod
+    const decryptedSecret = decryptTotpSecret(user.totp_secret);
     const verified = speakeasy.totp.verify({
-      secret: user.totp_secret,
+      secret: decryptedSecret,
       encoding: 'base32',
       token: totpCode,
       window: 2
@@ -229,9 +270,10 @@ app.post('/api/verify-totp', async (req, res) => {
       return res.status(400).json({ error: 'TOTP nie jest włączone' });
     }
 
-    // Weryfikuj kod TOTP
+    // Odszyfruj secret i weryfikuj kod TOTP
+    const decryptedSecret = decryptTotpSecret(user.totp_secret);
     const verified = speakeasy.totp.verify({
-      secret: user.totp_secret,
+      secret: decryptedSecret,
       encoding: 'base32',
       token: totpCode,
       window: 2
@@ -255,9 +297,15 @@ app.post('/api/verify-totp', async (req, res) => {
   }
 });
 
-// CRUD - Lista notatek użytkownika
+// CRUD - Lista notatek użytkownika (wymaga 2FA)
 app.get('/api/my-items', authenticateToken, async (req, res) => {
   try {
+    // Sprawdź czy użytkownik ma włączone 2FA
+    const user = await dbHelpers.get('SELECT totp_enabled FROM users WHERE id = ?', [req.userId]);
+    if (!user || !user.totp_enabled) {
+      return res.status(403).json({ error: 'Dostęp do notatek wymaga włączenia 2FA' });
+    }
+
     const items = await dbHelpers.all(
       'SELECT id, title, content, created_at FROM items WHERE user_id = ? ORDER BY created_at DESC',
       [req.userId]
@@ -269,9 +317,15 @@ app.get('/api/my-items', authenticateToken, async (req, res) => {
   }
 });
 
-// CRUD - Dodaj notatkę
+// CRUD - Dodaj notatkę (wymaga 2FA)
 app.post('/api/my-items', authenticateToken, async (req, res) => {
   try {
+    // Sprawdź czy użytkownik ma włączone 2FA
+    const user = await dbHelpers.get('SELECT totp_enabled FROM users WHERE id = ?', [req.userId]);
+    if (!user || !user.totp_enabled) {
+      return res.status(403).json({ error: 'Dodawanie notatek wymaga włączenia 2FA' });
+    }
+
     const { title, content } = req.body;
 
     if (!title) {
@@ -294,9 +348,15 @@ app.post('/api/my-items', authenticateToken, async (req, res) => {
   }
 });
 
-// CRUD - Edytuj notatkę
+// CRUD - Edytuj notatkę (wymaga 2FA)
 app.put('/api/my-items/:id', authenticateToken, async (req, res) => {
   try {
+    // Sprawdź czy użytkownik ma włączone 2FA
+    const user = await dbHelpers.get('SELECT totp_enabled FROM users WHERE id = ?', [req.userId]);
+    if (!user || !user.totp_enabled) {
+      return res.status(403).json({ error: 'Edycja notatek wymaga włączenia 2FA' });
+    }
+
     const { id } = req.params;
     const { title, content } = req.body;
 
@@ -326,9 +386,15 @@ app.put('/api/my-items/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// CRUD - Usuń notatkę
+// CRUD - Usuń notatkę (wymaga 2FA)
 app.delete('/api/my-items/:id', authenticateToken, async (req, res) => {
   try {
+    // Sprawdź czy użytkownik ma włączone 2FA
+    const user = await dbHelpers.get('SELECT totp_enabled FROM users WHERE id = ?', [req.userId]);
+    if (!user || !user.totp_enabled) {
+      return res.status(403).json({ error: 'Usuwanie notatek wymaga włączenia 2FA' });
+    }
+
     const { id } = req.params;
 
     // Sprawdź czy notatka należy do użytkownika
